@@ -1,0 +1,1015 @@
+---
+title: "Projet_MRR_V1"
+author: "Abdoulaye SAKHO, Naïm SOUNI"
+date: "08/11/2021"
+output: pdf_document
+
+number_sections: TRUE
+toc: TRUE # pour se créer une table des matières
+
+#toc_depth: 3 # valeur par défaut, seul les # et ## serot pris en compte dans la table
+ #pour avoir les numéros des chapitres/sous chapitres
+    
+    #{-} ou {.unnumbered} pour ne pas mettre d enuméros sur une section particulière. ex:
+      ##This section is unnumbered {-}
+---
+\newpage
+
+#BDD:
+
+## Intro/Début:
+```{r}
+tabtrain=read.table("train.csv",header=TRUE,sep=',')
+tabtest=read.table("test.csv",header=TRUE,sep=',')
+#tabtrain
+#tabtest
+
+```
+On a n>>p !!!!!
+
+```{r}
+tabblook<-as.data.frame(cbind(tabtrain$stormid,tabtrain$instant_t,tabtrain$target))
+#tabblook
+#c'etait pour observer les 0
+```
+
+
+
+## Elimination des observations/données aberrantes:
+On enlève les "stormid" et les X.
+```{r}
+#on enlève les 0:
+tab<-tabtrain[1,]#pour crée tab de la bonne taille et du bon type
+
+for(i in 1:10308){
+  if(as.numeric(tabtrain[i,377]) != 0){tab<-rbind(tab,tabtrain[i,])}
+}
+tab<-tab[-1,]# on enlève la premièere ligne qui nous a permis de créer tab avec le bon type et le bon nbre de colonnes
+
+
+#tab# table d'origine sans les 0
+#colnames(tab)
+
+
+tabtrain2<-tab[,-2]
+tabtrain2<-tabtrain2[,-1]
+#tabtrain2 # c'est atb mais sans les colonnes "stormid" et "X"
+```
+
+
+## Compression des variables u,v,z
+On tente la compression ici:
+si tu run ce bout de code R tu vas buguer, si tu veux run la suite ne run pas celui-ci
+```{r}
+
+x<-seq(from=12,to=374,by=121)# va prendre les numéros de colonnes
+# de u_0_0, v_0_0, z_0_0
+# me sert à démarrer la compression pour z
+#puis pour u puis pour v
+#x
+
+tabtrain2<-as.matrix(tabtrain2)# C CA QUI FAISAIT BUGIUER, IL FAUT CONVERIR
+#tabtrain2<-as.matrix(tab)
+Y<-matrix(ncol=15,nrow=nrow(tabtrain2),data=0)
+
+library(tidyverse)
+Z<-as.numeric(str_split(str_split(tab$stormid, "N",simplify = TRUE)[,1],
+                        "S",simplify = TRUE)[,1])# contient année et jour collé en dble
+Z_année<-Z%/%1000#colonnes des néées
+Z_jour<-Z%%1000#colonne des jours
+
+
+k1=11
+k2=121
+for(i in 1:nrow(tabtrain2)){# le x que je traite
+  m=-1
+  for(j in x){# corresponds à si jsuis avec u,v ou z
+    m=m+1# comme ca pr 1 je m'occupe des 5 premières colonnes de z
+    #pour 2 les 5 de u ( et apres z)
+    
+    
+    Y[i,(1+5*m)]<-mean(cbind(tabtrain2[i,j:(j+4)],tabtrain2[i,(j+k1):(j+4+k1)],tabtrain2[i,(j+2*k1):(j+4+2*k1)],tabtrain2[i,(j+3*k1):(j+4+3*k1)],tabtrain2[i,(j+4*k1):(j+4+4*k1)]))#Z1
+    
+    Y[i,(2+5*m)]<-mean(cbind(tabtrain2[i,(j+6):((j+6)+4)],tabtrain2[i,((j+6)+k1):((j+6)+4+k1)],tabtrain2[i,((j+6)+2*k1):((j+6)+4+2*k1)],tabtrain2[i,((j+6)+3*k1):((j+6)+4+3*k1)],tabtrain2[i,((j+6)+4*k1):((j+6)+4+4*k1)]))#Z2
+    
+    Y[i,(3+5*m)]<-mean(cbind(tabtrain2[i,(6*11+j):((6*11+j)+4)],tabtrain2[i,((6*11+j)+k1):((6*11+j)+4+k1)],tabtrain2[i,((6*11+j)+2*k1):((6*11+j)+4+2*k1)],tabtrain2[i,((6*11+j)+3*k1):((6*11+j)+4+3*k1)],tabtrain2[i,((6*11+j)+4*k1):((6*11+j)+4+4*k1)]))#Z3
+    
+    Y[i,(4+5*m)]<-mean(cbind(tabtrain2[i,(6*11+6+j):((6*11+6+j)+4)],tabtrain2[i,((6*11+6+j)+k1):((6*11+6+j)+4+k1)],tabtrain2[i,((6*11+6+j)+2*k1):((6*11+6+j)+4+2*k1)],tabtrain2[i,((6*11+6+j)+3*k1):((6*11+6+j)+4+3*k1)],tabtrain2[i,((6*11+6+j)+4*k1):((6*11+6+j)+4+4*k1)]))#Z4
+    
+    Y[i,(5+5*m)]<-mean(cbind(tabtrain2[i,(j+3+3*11):((j+3+3*11)+4)],tabtrain2[i,((j+3+3*11)+k1):((j+3+3*11)+4+k1)],tabtrain2[i,((j+3+3*11)+2*k1):((j+3+3*11)+4+2*k1)],tabtrain2[i,((j+3+3*11)+3*k1):((j+3+3*11)+4+3*k1)],tabtrain2[i,((j+3+3*11)+4*k1):((j+3+3*11)+4+4*k1)]))#Z5
+  }
+  
+}
+
+cost<-cos(2*pi*Z_jour/365.25)
+sint<-sin(2*pi*Z_jour/365.25)
+
+#Y
+Y<-as.data.frame(Y)
+
+Y<-cbind(tab$target, tab$stormid,Z_année,cost,sint,tabtrain2[,1:11],Y)
+#Y<-cbind(tabtrain2[,1:11],Y,(tab$stormid),(tab$target))
+
+#Y<-as.data.frame(Y)
+
+#colnames(Y)<-c(colnames(tab)[3:13],"Z1","Z2","Z3","Z4","Z5","U1","U2","U3","U4","U5","V1","V2","V3","V4","V5","stormid","target")
+colnames(Y)<-c("target","stormid","Année","cos_jour","sin_jour",colnames(tab)[3:13],"Z1","Z2","Z3","Z4","Z5","U1","U2","U3","U4","U5","V1","V2","V3","V4","V5")
+
+#Y# tab origine sans les 0 ET "compressée"
+Y[1,]
+```
+
+## Etude des corrélations
+```{r}
+
+tabcor<-cor(Y[,-2])
+library(corrplot)
+corrplot(tabcor,type="upper",method="circle")
+```
+ on observe que les dernieres veriables sont peu corrélées entre elles et très peu corrélées aux variables non modifi, les anciennes d ebases
+ (regarder 4 dernieres colonnes )
+
+
+
+
+On étudie les corrélations de nos variables (sur Excell notammment):
+```{r}
+#a<-as.data.frame(abs(cor(tabtrain2)))# on enlève la colonne X avec les noms
+a<-as.data.frame(abs(cor(tabcor)))
+a
+#library(corrplot)
+#cor(tabtrain[,-2])[1]
+#corrplot(cor(tabtrain[,-2]),type="upper",method="circle")
+
+#library(rJava)
+#library(xlsxjars)
+#library(xlsx)
+#write.xlsx2(x=a, file="cor_prjet.xlsx", sheetName="Fauille principale",
+ # col.names=TRUE, row.names=TRUE, append=FALSE)
+
+write.table(x = a, file ="cor_table.csv", sep =";",row.names=FALSE,col.names=FALSE,append=FALSE)# pr écrire dans un .csv
+```
+
+On affiche matrix
+```{r}
+
+image(main="Image des corrélations du dataset d'origine",xlab="variable",ylab = "variable",1:30,1:30,as.matrix(a))
+
+#plot(as.matrix(a))
+#persp(1:375,1:375,as.matrix(a),theta=80,phi=30,col="blue",shade=0.2)
+#image(as.matrix(t(a)))
+```
+
+
+# Cross Validation:
+
+
+faut utiliser table(X$stormid) comme ca et pas avec names par dessus.
+Sinon tu vas pas t'en sortir.
+```{r}
+Kfold<-function(X,k){
+  X2<-X
+  
+  namestorm<-table(X$stormid)# les tempêtes, leurs ids et nbre de fois qu'ils apparaissent
+  res<-list()
+  nbs<-length(namestorm)%/%k # on fait une div euclidienne pr savoir nbre de gens dans chaque groupe
+  # donc du coup il se peut que les reste soit non nul
+  #auquel cas, des observations ne seraient pas prises en compte
+  nbsreste<-length(namestorm)%%k
+  index2<-c()
+  
+  #test<-X[1,]
+  
+  for(j in 1:(k-1)){# pour chaque roupe
+    index<-sample(1:length(namestorm),size=nbs)# les id des storm qui feront partie du groupe en cours de traitement
+    
+    app<-X[1,]# pour avoir la bonne forme directement
+  
+    for(m in index){# Pour un groupe dnnée, on fait ca avec les ids du groupe
+      
+      for(i in 1:nrow(X)){
+        if(X[i,2] == names(namestorm[m])){
+          app<-rbind(app,X[i,])# on ajoute dans le groupe
+          
+          #X2<-X2[-i,]# on enlève de X2 pour éviter les doublons plus tard
+          index2<-c(index2,i)# on garde index des gens qui sont affectées à un groupe
+        }
+      }
+      
+    }
+    
+    namestorm<-namestorm[-index]# on enlève les id storm du groupe
+    
+    app<-app[-1,]# on supprime "ligne de création" avant
+    res[[j]]<-app# on ajoute le groupe au resultat final
+   
+  }
+  #res[[k]]<-X2# les gens qui restent sont ajoutés au dernier roupe, pour éviter d'avoir un reste
+  #on gère au dessus le k -ème groupe, il va contenir son nbs+nbreste éléments
+  res[[k]]<-X2[-index2,]
+  
+  return(res)
+
+}
+
+Fold10<-Kfold(Y,10)
+
+```
+
+
+
+
+
+
+
+
+
+\newpage
+# Models Building
+
+## Simple Linear regression:
+
+On effectue une première régression liéaire simple avec une Cross Validation pour le tester.
+Ce modèle permet de vérifier les hypothèses du modèle.
+```{r}
+
+
+onapp<-(Fold10[[1]])[1,-2]
+for( i in 1:9){ onapp<-rbind(onapp, (Fold10[[i]])[,-2])}
+onapp<-as.data.frame(onapp)
+#onapp<-as.data.frame( rbind((Fold10[[1]])[,-2], (Fold10[[2]])[,-2], (Fold10[[3]])[,-2],
+                            #(Fold10[[4]])[,-2], (Fold10[[5]])[,-2], (Fold10[[6]])[,-2],
+                            #(Fold10[[7]])[,-2], (Fold10[[8]])[,-2], (Fold10[[9]])[,-2],) #)
+
+modreg=lm(target~., data=onapp)
+summary(modreg)
+
+# Etudes des résidus (bref commentaire sur corrélations et significativité de svariables):
+
+shapiro.test(modreg$residuals[1:500])
+par(mfrow=c(1,2))
+qqnorm(modreg$residuals[1:500])
+qqline(modreg$residuals[1:500],col="red")
+plot(modreg$residuals)+abline(0,0,col="red")
+#plot(modreg$residuals[1:500],onapp[1:500,1])+abline(0,0,col="red") bizzare ce que ca montre, mais autre plot suffit et permet de donner la bonne conclusion
+
+# on clacule rmse:
+pred=predict(modreg, (Fold10[[10]])[,-2:(-1)] )
+library(Metrics)
+rmse(pred, (Fold10[[10]])[,1] )
+
+
+var(pred)/var((Fold10[[10]])[,1])
+#summary(modreg)$r.squared
+```
+
+
+On fait une 10-Cross Validation à présent qu'on a étudié les hypothèses de ce type de modèle:
+```{r}
+reslm<-list()# resultat des
+# 10 élements
+# chaque élément est un data frame de 1 colonne
+#1ere ligne: RMSE
+#2eme: r carré
+#les autres lignes sont les valeurs des coeffs les uns après les autres
+# IL Y A DES NOMS PR CHAQUE LIGNE
+
+for(i in 1:10){# i est l'indice du Fold qui nous sert de test (en cours)
+  
+  
+  #création du Fold[i]:
+  onapp10<-(Fold10[[1]])[1,-2]# pour créer le bon type et le réinitialiser
+  for( j in 1:10){ 
+    if(j != i){onapp10<-rbind(onapp10, (Fold10[[j]])[,-2])}
+  }
+  onapp10<-onapp10[-1,]# on enlève la ligne de création
+  onapp10<-as.data.frame(onapp10)
+  
+  
+   
+  # Construction du modele linéaire simple i:
+  modreg2=lm(target~., data=onapp10)
+
+  
+  
+  #On calcule RMSE et r carré sur le fold de test:
+  pred2<-predict(modreg2,(Fold10[[i]])[,-2:(-1)])
+  rmsecalc<-rmse(pred2,(Fold10[[i]])[,1])
+  rcarre<-var(pred2)/var((Fold10[[i]])[,1])
+   
+  
+  
+  ## ons stock noc variables:
+    ## On stock le resultats dans la liste finale
+    ##1ère colonne rmse, 2ème Rcarré et les autres les coeffes, d eintercepte à la fin
+    ## garder les preds pr des diagrammes après ?
+  
+  tmp<-rbind(rmsecalc,rcarre)
+  tmp2<-rbind(tmp,as.matrix(coef(modreg2)))
+  rownames(tmp2)<-c("RMSE","R-squared",names(coef(modreg2)))
+  reslm[[i]]<-as.data.frame( tmp2 )
+   
+}
+
+# On vérifie nos résulktat et on affiche les données sur ces types d emodèles
+
+reslm[[1]]
+which.min( c( (reslm[[1]])[1,1],(reslm[[2]])[1,1],(reslm[[3]])[1,1],(reslm[[4]])[1,1],
+          (reslm[[5]])[1,1],(reslm[[6]])[1,1],(reslm[[7]])[1,1],(reslm[[8]])[1,1],
+          (reslm[[9]])[1,1],(reslm[[10]])[1,1] ) )# pr retrouver le meilleur dans les lm
+
+
+l11<-mean( c( (reslm[[1]])[1,1],(reslm[[2]])[1,1],(reslm[[3]])[1,1],(reslm[[4]])[1,1],
+          (reslm[[5]])[1,1],(reslm[[6]])[1,1],(reslm[[7]])[1,1],(reslm[[8]])[1,1],
+          (reslm[[9]])[1,1],(reslm[[10]])[1,1] ) )# moyenne rmmse
+l12<-var( c( (reslm[[1]])[1,1],(reslm[[2]])[1,1],(reslm[[3]])[1,1],(reslm[[4]])[1,1],
+          (reslm[[5]])[1,1],(reslm[[6]])[1,1],(reslm[[7]])[1,1],(reslm[[8]])[1,1],
+          (reslm[[9]])[1,1],(reslm[[10]])[1,1] ) )# var rmmse
+
+l13<-mean( c( (reslm[[1]])[2,1],(reslm[[2]])[2,1],(reslm[[3]])[2,1],(reslm[[4]])[2,1],
+          (reslm[[5]])[2,1],(reslm[[6]])[2,1],(reslm[[7]])[2,1],(reslm[[8]])[2,1],
+          (reslm[[9]])[2,1],(reslm[[10]])[2,1] ) )#moyenne r carré
+l14<-var( c( (reslm[[1]])[2,1],(reslm[[2]])[2,1],(reslm[[3]])[2,1],(reslm[[4]])[2,1],
+          (reslm[[5]])[2,1],(reslm[[6]])[2,1],(reslm[[7]])[2,1],(reslm[[8]])[2,1],
+          (reslm[[9]])[2,1],(reslm[[10]])[2,1] ) )#var r carré
+
+# On créee la table des resultats finaux et on stock les données des modèles lm à l'intérieur:
+
+a=c("lm","Bacward","Forward","Both","Lasso","Ridge","Elastic-Net","Group-Lasso")
+b=c("mean(RMSE)","var(RMSE)","mean(R-squared)","var(R-squared)")
+Final<-matrix(ncol=4, nrow=8, data=0,dimnames = list(a,b))# la matrice qui contiendre la tableau final
+# d'évaluation en moyenne des modèles
+
+Final[1,1]<-l11
+Final[1,2]<-l12
+Final[1,3]<-l13
+Final[1,4]<-l14
+```
+
+
+
+
+## Incremental methods:
+
+Les hypothèses de gaussianité et d’homoscédalité des résidus posées par ces modèles ont déjà été vérifiés, nous n'avons pas besoin de recommencer.
+
+### Backward
+Test:
+```{r}
+regbackward=step(modreg,direction='backward')# trace=0: pr pas afficher les étapes"
+summary(regbackward)
+
+par(mfrow=c(1,2))
+barplot(coef(regbackward))
+barplot(coef(regbackward)[-1],names.arg=names(coef(regbackward))[-1])
+
+
+# on clacule RMSE et R-carré:
+pred=predict(regbackward, (Fold10[[10]])[,-2:(-1)] )
+
+rmse(pred, (Fold10[[10]])[,1] )
+var(pred)/var((Fold10[[10]])[,1])
+
+```
+
+Application du backward à un 10Fold:
+```{r}
+resbackward<-list()
+
+for(i in 1:10){# i est l'indice du Fold qui nous sert de test (en cours)
+  
+  
+  #création du Fold[i]:
+  onapp10<-(Fold10[[1]])[1,-2]# pour créer le bon type et le réinitialiser
+  for( j in 1:10){ 
+    if(j != i){onapp10<-rbind(onapp10, (Fold10[[j]])[,-2])}
+  }
+  onapp10<-onapp10[-1,]# on enlève la ligne de création
+  onapp10<-as.data.frame(onapp10)
+   
+  # Construction du modele bacward i:
+  modreg2=lm(target~., data=onapp10)
+  regbackward2=step(modreg2,direction='backward',trace=0)
+
+    
+  
+  #On calcule RMSE et r carré sur le fold de test:
+  pred2<-predict(regbackward2,(Fold10[[i]])[,-2:(-1)])
+  rmsecalc<-rmse(pred2,(Fold10[[i]])[,1])
+  rcarre<-var(pred2)/var((Fold10[[i]])[,1])
+  
+  
+  #On stock nos données:
+    ## On stock le resultats dans la liste finale
+    ##1ère colonne rmse, 2ème Rcarré et les autres les coeffes, d eintercepte à la fin
+    ## garder les preds pr des diagrammes après ?
+ 
+  
+  tmp<-rbind(rmsecalc,rcarre)
+  tmp2<-rbind(tmp,as.matrix(coef(regbackward2)))
+  rownames(tmp2)<-c("RMSE","R-squared",names(coef(regbackward2)))
+
+  resbackward[[i]]<-as.data.frame( tmp2 )
+   
+}
+
+resbackward[[1]]
+
+which.min( c( (resbackward[[1]])[1,1],(resbackward[[2]])[1,1],(resbackward[[3]])[1,1],
+              (resbackward[[4]])[1,1],(resbackward[[5]])[1,1],(resbackward[[6]])[1,1],
+              (resbackward[[7]])[1,1],(resbackward[[8]])[1,1],
+              (resbackward[[9]])[1,1],(resbackward[[10]])[1,1] ) )# pr retrouver le meilleur dans les lm
+
+
+l21<-mean( c( (resbackward[[1]])[1,1],(resbackward[[2]])[1,1],(resbackward[[3]])[1,1],
+         (resbackward[[4]])[1,1],(resbackward[[5]])[1,1],(resbackward[[6]])[1,1],
+         (resbackward[[7]])[1,1],(resbackward[[8]])[1,1],
+         (resbackward[[9]])[1,1],(resbackward[[10]])[1,1] ) )# moyenne rmmse
+
+l22<-var( c( (resbackward[[1]])[1,1],(resbackward[[2]])[1,1],(resbackward[[3]])[1,1],
+        (resbackward[[4]])[1,1],(resbackward[[5]])[1,1],(resbackward[[6]])[1,1],
+        (resbackward[[7]])[1,1],(resbackward[[8]])[1,1],
+        (resbackward[[9]])[1,1],(resbackward[[10]])[1,1] ) )# var rmmse
+
+l23<-mean( c( (resbackward[[1]])[2,1],(resbackward[[2]])[2,1],(resbackward[[3]])[2,1],
+         (resbackward[[4]])[2,1],(resbackward[[5]])[2,1],(resbackward[[6]])[2,1],
+         (resbackward[[7]])[2,1],(resbackward[[8]])[2,1],
+         (resbackward[[9]])[2,1],(resbackward[[10]])[2,1] ) )#moyenne r carré
+
+l24<-var( c( (resbackward[[1]])[2,1],(resbackward[[2]])[2,1],(resbackward[[3]])[2,1],
+        (resbackward[[4]])[2,1],(resbackward[[5]])[2,1],(resbackward[[6]])[2,1],
+        (resbackward[[7]])[2,1],(resbackward[[8]])[2,1],
+        (resbackward[[9]])[2,1],(resbackward[[10]])[2,1] ) )#var r carré
+
+Final[2,1]<-l21
+Final[2,2]<-l22
+Final[2,3]<-l23
+Final[2,4]<-l24
+
+```
+
+
+
+
+### Forward
+```{r}
+regforward=step(lm(target~1,data=onapp),list(upper=modreg),direction='forward')
+summary(regforward)
+par(mfrow=c(1,2))
+barplot(coef(regforward))
+barplot(coef(regforward)[-1],names.arg=names(coef(regforward))[-1])
+
+
+# on clacule rmse:
+pred=predict(regforward, (Fold10[[10]])[,-2:(-1)] )
+
+rmse(pred, (Fold10[[10]])[,1] )
+
+#on calcule r-carré:
+var(pred)/var((Fold10[[10]])[,1])
+summary(regforward)$r.squared
+```
+
+
+Application du forward à un 10Fold:
+
+```{r}
+resforward<-list()
+
+for(i in 1:10){# i est l'indice du Fold qui nous sert de test (en cours)
+  
+  
+  #création du Fold[i]:
+  onapp10<-(Fold10[[1]])[1,-2]# pour créer le bon type et le réinitialiser
+  for( j in 1:10){ 
+    if(j != i){onapp10<-rbind(onapp10, (Fold10[[j]])[,-2])}
+  }
+  onapp10<-onapp10[-1,]# on enlève la ligne de création
+  onapp10<-as.data.frame(onapp10)
+   
+  
+  # Construction du modele backward i:
+  modreg2=lm(target~., data=onapp10)
+  regforward2=step(lm(target~1,data=onapp10),list(upper=modreg2),
+                   direction='forward',trace=0)
+
+    
+  
+  
+  #On calcule RMSE et r carré sur le fold de test:
+  pred2<-predict(regforward2,(Fold10[[i]])[,-2:(-1)])
+  rmsecalc<-rmse(pred2,(Fold10[[i]])[,1])
+  rcarre<-var(pred2)/var((Fold10[[i]])[,1])
+
+ 
+  
+  
+  tmp<-rbind(rmsecalc,summary(regforward2)$r.squared)
+  tmp2<-rbind(tmp,as.matrix(coef(regforward2)))
+  rownames(tmp2)<-c("RMSE","R-squared",names(coef(regforward2)))
+
+  resforward[[i]]<-as.data.frame( tmp2 )
+   
+}
+
+resforward[[1]]
+
+which.min( c( (resforward[[1]])[1,1],(resforward[[2]])[1,1],(resforward[[3]])[1,1],
+              (resforward[[4]])[1,1],(resforward[[5]])[1,1],(resforward[[6]])[1,1],
+              (resforward[[7]])[1,1],(resforward[[8]])[1,1],
+              (resforward[[9]])[1,1],(resforward[[10]])[1,1] ) )# pr retrouver le meilleur dans les lm
+
+
+l31<-mean( c( (resforward[[1]])[1,1],(resforward[[2]])[1,1],(resforward[[3]])[1,1],
+         (resforward[[4]])[1,1],(resforward[[5]])[1,1],(resforward[[6]])[1,1],
+         (resforward[[7]])[1,1],(resforward[[8]])[1,1],
+         (resforward[[9]])[1,1],(resforward[[10]])[1,1] ) )# moyenne rmmse
+
+l32<-var( c( (resforward[[1]])[1,1],(resforward[[2]])[1,1],(resforward[[3]])[1,1],
+        (resforward[[4]])[1,1],(resforward[[5]])[1,1],(resforward[[6]])[1,1],
+        (resforward[[7]])[1,1],(resforward[[8]])[1,1],
+        (resforward[[9]])[1,1],(resforward[[10]])[1,1] ) )# var rmmse
+
+l33<-mean( c( (resforward[[1]])[2,1],(resforward[[2]])[2,1],(resforward[[3]])[2,1],
+         (resforward[[4]])[2,1],(resforward[[5]])[2,1],(resforward[[6]])[2,1],
+         (resforward[[7]])[2,1],(resforward[[8]])[2,1],
+         (resforward[[9]])[2,1],(resforward[[10]])[2,1] ) )#moyenne r carré
+
+l34<-var( c( (resforward[[1]])[2,1],(resforward[[2]])[2,1],(resforward[[3]])[2,1],
+        (resforward[[4]])[2,1],(resforward[[5]])[2,1],(resforward[[6]])[2,1],
+        (resforward[[7]])[2,1],(resforward[[8]])[2,1],
+        (resforward[[9]])[2,1],(resforward[[10]])[2,1] ) )#var r carré
+
+Final[3,1]<-l31
+Final[3,2]<-l32
+Final[3,3]<-l33
+Final[3,4]<-l34
+```
+
+###Both
+```{r}
+regboth=step(modreg,direction='both')
+summary(regboth)
+par(mfrow=c(1,2))
+barplot(coef(regboth))
+barplot(coef(regboth)[-1],names.arg=names(coef(regboth))[-1])
+
+# on clacule rmse:
+pred=predict(regboth, (Fold10[[10]])[,-2:(-1)] )
+
+rmse(pred, (Fold10[[10]])[,1] )
+var(pred)/var((Fold10[[10]])[,1])
+summary(regboth)$r.squared
+```
+
+
+```{r}
+resboth<-list()
+
+for(i in 1:10){# i est l'indice du Fold qui nous sert de test (en cours)
+  
+  
+  #création du Fold[i]:
+  onapp10<-(Fold10[[1]])[1,-2]# pour créer le bon type et le réinitialiser
+  for( j in 1:10){ 
+    if(j != i){onapp10<-rbind(onapp10, (Fold10[[j]])[,-2])}
+  }
+  onapp10<-onapp10[-1,]# on enlève la ligne de création
+  onapp10<-as.data.frame(onapp10)
+   
+  
+  # Construction du modele bacward i:
+  modreg2=lm(target~., data=onapp10)
+  regboth2=step(modreg2,direction='both',trace=0)
+  
+    
+  
+  #On calcule RMSE et r carré sur le fold de test:
+  pred2<-predict(regboth2,(Fold10[[i]])[,-2:(-1)])
+  rmsecalc<-rmse(pred2,(Fold10[[i]])[,1])
+  rcarre<-var(pred2)/var((Fold10[[i]])[,1])
+ 
+  
+  
+  tmp<-rbind(rmsecalc,summary(regboth2)$r.squared)
+  tmp2<-rbind(tmp,as.matrix(coef(regboth2)))
+  rownames(tmp2)<-c("RMSE","R-squared",names(coef(regboth2)))
+
+  resboth[[i]]<-as.data.frame( tmp2 )
+   
+}
+
+resboth[[1]]
+
+which.min( c( (resboth[[1]])[1,1],(resboth[[2]])[1,1],(resboth[[3]])[1,1],
+              (resboth[[4]])[1,1],(resboth[[5]])[1,1],(resboth[[6]])[1,1],
+              (resboth[[7]])[1,1],(resboth[[8]])[1,1],
+              (resboth[[9]])[1,1],(resboth[[10]])[1,1] ) )# pr retrouver le meilleur dans les lm
+
+
+l41<-mean( c( (resboth[[1]])[1,1],(resboth[[2]])[1,1],(resboth[[3]])[1,1],
+         (resboth[[4]])[1,1],(resboth[[5]])[1,1],(resboth[[6]])[1,1],
+         (resboth[[7]])[1,1],(resboth[[8]])[1,1],
+         (resboth[[9]])[1,1],(resboth[[10]])[1,1] ) )# moyenne rmmse
+
+l42<-var( c( (resboth[[1]])[1,1],(resboth[[2]])[1,1],(resboth[[3]])[1,1],
+        (resboth[[4]])[1,1],(resboth[[5]])[1,1],(resboth[[6]])[1,1],
+        (resboth[[7]])[1,1],(resboth[[8]])[1,1],
+        (resboth[[9]])[1,1],(resboth[[10]])[1,1] ) )# var rmmse
+
+l43<-mean( c( (resboth[[1]])[2,1],(resboth[[2]])[2,1],(resboth[[3]])[2,1],
+         (resboth[[4]])[2,1],(resboth[[5]])[2,1],(resboth[[6]])[2,1],
+         (resboth[[7]])[2,1],(resboth[[8]])[2,1],
+         (resboth[[9]])[2,1],(resboth[[10]])[2,1] ) )#moyenne r carré
+
+l44<-var( c( (resboth[[1]])[2,1],(resboth[[2]])[2,1],(resboth[[3]])[2,1],
+        (resboth[[4]])[2,1],(resboth[[5]])[2,1],(resboth[[6]])[2,1],
+        (resboth[[7]])[2,1],(resboth[[8]])[2,1],
+        (resboth[[9]])[2,1],(resboth[[10]])[2,1] ) )#var r carré
+
+Final[4,1]<-l41
+Final[4,2]<-l42
+Final[4,3]<-l43
+Final[4,4]<-l44
+
+```
+
+
+## Penalized OLS
+
+### Lasso:
+
+```{r}
+library(lars)
+
+#par défault, lars() renormalise les données
+reglasso=lars(as.matrix(onapp[,-1]),as.matrix(onapp[,1]),type="lasso")
+#on enlève pr x la target et les id
+# on enlève pr y
+
+# on créee la séquence des vleurs possibles pour normeL1(beta) :
+lasso.s<-seq(0,1,0.01)
+lasso.cv<-cv.lars(as.matrix(onapp[,-1]),as.matrix(onapp$target),
+                  K=10,index=lasso.s,mode="fraction")
+
+#l'indice de la valeur de normeL1(lambda) qui minimise la valeur de la 10-Cross Validation:
+lasso.mcv<-which.min(lasso.cv$cv)
+bests1 <- lasso.s[lasso.mcv]#la valeur de normL1(lambda) qui minimise la valeur de la 10-Cross Validation
+lasso.coef1 <- predict.lars(reglasso, s=bests1,
+                            type="coef", mode="frac")
+#bests1
+
+barplot(coef(lasso.coef1), names.arg= names(coef(lasso.coef1)) )
+
+
+# on clacule rmse:
+
+lasso.coef2 <- predict.lars(reglasso, s=bests1,
+                            newx= (Fold10[[10]])[,-2:(-1)],type="fit", mode="frac")
+
+#lasso.coef2$fit contient le fit pr les données non normalisées
+rmse(lasso.coef2$fit, (Fold10[[10]])[,1] )
+
+#on calcule R-carré:
+#dans modlasso mais pas le bon, pas la bonne valeur de lambda/s
+var(lasso.coef2$fit)/var( (Fold10[[10]])[,1] ) 
+
+
+```
+
+
+
+
+```{r}
+
+
+reslasso<-list()
+
+     ##on créee la séquence des vleurs possibles pour normeL1(beta) :
+  lasso.s<-seq(0,1,0.01)
+
+  
+  
+  
+for(i in 1:10){# i est l'indice du Fold qui nous sert de test (en cours)
+  
+  #création du Fold[i]:
+  onapp10<-(Fold10[[1]])[1,-2]# pour créer le bon type et le réinitialiser
+  for( j in 1:10){ 
+    if(j != i){onapp10<-rbind(onapp10, (Fold10[[j]])[,-2])}
+  }
+  onapp10<-onapp10[-1,]# on enlève la ligne de création
+  onapp10<-as.data.frame(onapp10)
+   
+  
+  
+  
+  # Construction du modele Lasso i:
+  modlasso2=lars(as.matrix(onapp10[,-1]),as.matrix(onapp10[,1]),type="lasso")
+    ##recherche de la meilleur valeur de normeL1(beta)
+  lasso.cv<-cv.lars(as.matrix(onapp10[,-1]),as.matrix(onapp10$target),
+                  K=10,index=lasso.s,mode="fraction",plot.it = FALSE)
+    ##l'indice (dans la liste lasso.s) de la valeur de normeL1(lambda) qui minimise la valeur de la 10-Cross Validation:
+  lasso.mcv<-which.min(lasso.cv$cv)
+  bests1 <- lasso.s[lasso.mcv]#la valeur de normL1(lambda) qui minimise la valeur de la 10-Cross Validation
+  
+  
+  
+  
+  # on clacule rmse:
+  lasso.coef2 <- predict.lars(modlasso2, s=bests1,
+                            newx=(Fold10[[i]])[,-2:(-1)],type="fit", mode="frac")
+  rmsecalc<-rmse(lasso.coef2$fit, (Fold10[[i]])[,1] )
+  #on calcule R-carré:
+  rcarre<-var(lasso.coef2$fit)/var((Fold10[[i]])[,1])
+
+  
+  
+  #On stock nos résultats:
+  tmp<-rbind(rmsecalc,rcarre)
+  tmp2<-rbind(tmp,as.matrix(coef(regboth2)))
+  rownames(tmp2)<-c("RMSE","R-squared",names(coef(regboth2)))
+
+  reslasso[[i]]<-as.data.frame( tmp2 )
+   
+}
+
+reslasso[[1]]
+
+which.min( c( (reslasso[[1]])[1,1],(reslasso[[2]])[1,1],(reslasso[[3]])[1,1],
+              (reslasso[[4]])[1,1],(reslasso[[5]])[1,1],(reslasso[[6]])[1,1],
+              (reslasso[[7]])[1,1],(reslasso[[8]])[1,1],
+              (reslasso[[9]])[1,1],(reslasso[[10]])[1,1] ) )# pr retrouver le meilleur dans les lm
+
+
+l51<-mean( c( (reslasso[[1]])[1,1],(reslasso[[2]])[1,1],(reslasso[[3]])[1,1],
+         (reslasso[[4]])[1,1],(reslasso[[5]])[1,1],(reslasso[[6]])[1,1],
+         (reslasso[[7]])[1,1],(reslasso[[8]])[1,1],
+         (reslasso[[9]])[1,1],(reslasso[[10]])[1,1] ) )# moyenne rmmse
+
+l52<-var( c( (reslasso[[1]])[1,1],(reslasso[[2]])[1,1],(reslasso[[3]])[1,1],
+        (reslasso[[4]])[1,1],(reslasso[[5]])[1,1],(reslasso[[6]])[1,1],
+        (reslasso[[7]])[1,1],(reslasso[[8]])[1,1],
+        (reslasso[[9]])[1,1],(reslasso[[10]])[1,1] ) )# var rmmse
+
+l53<-mean( c( (reslasso[[1]])[2,1],(reslasso[[2]])[2,1],(reslasso[[3]])[2,1],
+         (reslasso[[4]])[2,1],(reslasso[[5]])[2,1],(reslasso[[6]])[2,1],
+         (reslasso[[7]])[2,1],(reslasso[[8]])[2,1],
+         (reslasso[[9]])[2,1],(reslasso[[10]])[2,1] ) )#moyenne r carré
+
+l54<-var( c( (reslasso[[1]])[2,1],(reslasso[[2]])[2,1],(reslasso[[3]])[2,1],
+        (reslasso[[4]])[2,1],(reslasso[[5]])[2,1],(reslasso[[6]])[2,1],
+        (reslasso[[7]])[2,1],(reslasso[[8]])[2,1],
+        (reslasso[[9]])[2,1],(reslasso[[10]])[2,1] ) )#var r carré
+
+Final[5,1]<-l51
+Final[5,2]<-l52
+Final[5,3]<-l53
+Final[5,4]<-l54
+
+```
+
+
+### Ridge:
+
+```{r}
+library(MASS)
+#on construits les modèle pr différents lambda
+regridge=lm.ridge(target ~., data=onapp,lambda=seq(0,100,1))
+  ##on affiche courbe GCV:
+plot(names(regridge$GCV), regridge$GCV, type = 'l',
+     xlab = expression(lambda), ylab = "GCV Score")
+
+const = as.numeric(names(which.min(regridge$GCV)))
+const
+
+##On construit modèle avec meilleur lambda:
+regridgefinal=lm.ridge(target~., data=onapp,lambda=const)
+  ##coef(regridgefinal) on prends pas lui pour barplot, on veut les coeffs des valeurs normalisés
+barplot(coef(regridgefinal))
+
+
+# on clacule rmse:
+k<-as.matrix((Fold10[[10]])[,-2:(-1)])
+k<-cbind(cbind(rep(1,nrow(k))),k)
+pred = k %*% as.vector(coef(regridgefinal))# sur les données non normalisées
+rmse(pred, (Fold10[[10]])[,1] )
+
+
+#on calcule R-carré:
+var(pred)/var((Fold10[[10]])[,1])
+```
+
+
+
+```{r}
+resridge<-list()
+
+
+for(i in 1:10){# i est l'indice du Fold qui nous sert de test (en cours)
+  
+  
+  #création du Fold[i]:
+  onapp10<-(Fold10[[1]])[1,-2]# pour créer le bon type et le réinitialiser
+  for( j in 1:10){ 
+    if(j != i){onapp10<-rbind(onapp10, (Fold10[[j]])[,-2])}
+  }
+  onapp10<-onapp10[-1,]# on enlève la ligne de création
+  onapp10<-as.data.frame(onapp10)
+   
+  
+  
+  #on construits les modèle pr différents lambda
+  regridge2=lm.ridge(target ~., data=onapp10,lambda=seq(0,100,1))
+  const = as.numeric(names(which.min(regridge2$GCV)))
+    ##On construit modèle avec meilleur lambda:
+  regridgefinal2=lm.ridge(target~., data=onapp10,lambda=const)
+
+  
+  
+  # on clacule rmse:
+  k<-as.matrix((Fold10[[i]])[,-2:(-1)])
+  k<-cbind(cbind(rep(1,nrow(k))),k)
+  pred2 = k %*% as.vector(coef(regridgefinal2))
+  rmsecalc<-rmse(pred2, (Fold10[[i]])[,1] )
+  
+  #on calcule R-carré:
+  rcarre<-var(pred2)/var((Fold10[[i]])[,1])
+
+  
+  
+  #On stock nos résultats:
+  tmp<-rbind(rmsecalc,rcarre)
+  tmp2<-rbind(tmp,as.matrix(coef(regboth2)))
+  rownames(tmp2)<-c("RMSE","R-squared",names(coef(regboth2)))
+
+  resridge[[i]]<-as.data.frame( tmp2 )
+   
+}
+
+resridge[[1]]
+
+which.min( c( (resridge[[1]])[1,1],(resridge[[2]])[1,1],(resridge[[3]])[1,1],
+              (resridge[[4]])[1,1],(resridge[[5]])[1,1],(resridge[[6]])[1,1],
+              (resridge[[7]])[1,1],(resridge[[8]])[1,1],
+              (resridge[[9]])[1,1],(resridge[[10]])[1,1] ) )# pr retrouver le meilleur dans les lm
+
+
+l61<-mean( c( (resridge[[1]])[1,1],(resridge[[2]])[1,1],(resridge[[3]])[1,1],
+         (resridge[[4]])[1,1],(resridge[[5]])[1,1],(resridge[[6]])[1,1],
+         (resridge[[7]])[1,1],(resridge[[8]])[1,1],
+         (resridge[[9]])[1,1],(resridge[[10]])[1,1] ) )# moyenne rmmse
+
+l62<-var( c( (resridge[[1]])[1,1],(resridge[[2]])[1,1],(resridge[[3]])[1,1],
+        (resridge[[4]])[1,1],(resridge[[5]])[1,1],(resridge[[6]])[1,1],
+        (resridge[[7]])[1,1],(resridge[[8]])[1,1],
+        (resridge[[9]])[1,1],(resridge[[10]])[1,1] ) )# var rmmse
+
+l63<-mean( c( (resridge[[1]])[2,1],(resridge[[2]])[2,1],(resridge[[3]])[2,1],
+         (resridge[[4]])[2,1],(resridge[[5]])[2,1],(resridge[[6]])[2,1],
+         (resridge[[7]])[2,1],(resridge[[8]])[2,1],
+         (resridge[[9]])[2,1],(resridge[[10]])[2,1] ) )#moyenne r carré
+
+l64<-var( c( (resridge[[1]])[2,1],(resridge[[2]])[2,1],(resridge[[3]])[2,1],
+        (resridge[[4]])[2,1],(resridge[[5]])[2,1],(resridge[[6]])[2,1],
+        (resridge[[7]])[2,1],(resridge[[8]])[2,1],
+        (resridge[[9]])[2,1],(resridge[[10]])[2,1] ) )#var r carré
+
+Final[6,1]<-l61
+Final[6,2]<-l62
+Final[6,3]<-l63
+Final[6,4]<-l64
+
+```
+
+
+## Comparaison des modèles et sélection du meilleur modèle:
+
+Ecrire sur un fichier Excell
+
+On prends meilleur type de modèle. Parmi ce tytpe d emodèle, on prends le meilleur (RMSE ou Rcarré)
+
+On prends ses coeffs et on calcule les données train 
+(avant ca petit trvail pr savoir quelles variables ont été sélectionnées (dans le cas des Incrmental si c eux qui gagnent, ils sont les suels a vrmt éliminé des variables, les autres leurs donnent yune très petite valeur))
+
+
+
+```{r}
+simpledonnees<-cbind(onapp$target,onapp$windspeed)
+colnames(simpledonnees)<-c("target","windspeed")
+modelesimple<-lm(target~., data=as.data.frame(simpledonnees))
+summary(modelesimple)
+
+fiit<-as.data.frame((Fold10[[10]])$windspeed)
+colnames(fiit)<-c("windspeed")
+pred2<-predict(modelesimple,fiit )
+rmse(pred2,(Fold10[[10]])[,1])
+var(pred2)/var((Fold10[[10]])[,1])
+
+
+```
+
+
+10 Fold
+```{r}
+reslms<-list()# resultat des
+# 10 élements
+# chaque élément est un data frame de 1 colonne
+#1ere ligne: RMSE
+#2eme: r carré
+#les autres lignes sont les valeurs des coeffs les uns après les autres
+# IL Y A DES NOMS PR CHAQUE LIGNE
+
+for(i in 1:10){# i est l'indice du Fold qui nous sert de test (en cours)
+  
+  
+  #création du Fold[i]:
+  onapp10<-(Fold10[[1]])[1,-2]# pour créer le bon type et le réinitialiser
+  for( j in 1:10){ 
+    if(j != i){onapp10<-rbind(onapp10, (Fold10[[j]])[,-2])}
+  }
+  onapp10<-onapp10[-1,]# on enlève la ligne de création
+  onapp10<-as.data.frame(onapp10)
+  
+  
+   
+  # Construction du modele linéaire simple i:
+  simpledonnees<-cbind(onapp10$target,onapp$windspeed)
+  colnames(simpledonnees)<-c("target","windspeed")
+  modreg2<-lm(target~., data=as.data.frame(simpledonnees))
+
+  
+  
+  #On calcule RMSE et r carré sur le fold de test:
+  fiit<-as.data.frame((Fold10[[10]])$windspeed)
+  colnames(fiit)<-c("windspeed")
+  pred2<-predict(modreg2,fiit)
+  
+  rmsecalc<-rmse(pred2,(Fold10[[i]])[,1])
+  rcarre<-var(pred2)/var((Fold10[[i]])[,1])
+   
+  
+  
+  ## ons stock noc variables:
+    ## On stock le resultats dans la liste finale
+    ##1ère colonne rmse, 2ème Rcarré et les autres les coeffes, d eintercepte à la fin
+    ## garder les preds pr des diagrammes après ?
+  
+  tmp<-rbind(rmsecalc,rcarre)
+  tmp2<-rbind(tmp,as.matrix(coef(modreg2)))
+  rownames(tmp2)<-c("RMSE","R-squared",names(coef(modreg2)))
+  reslms[[i]]<-as.data.frame( tmp2 )
+   
+}
+
+# On vérifie nos résulktat et on affiche les données sur ces types d emodèles
+
+reslms[[1]]
+which.min( c( (reslms[[1]])[1,1],(reslms[[2]])[1,1],(reslms[[3]])[1,1],(reslms[[4]])[1,1],
+          (reslms[[5]])[1,1],(reslms[[6]])[1,1],(reslms[[7]])[1,1],(reslms[[8]])[1,1],
+          (reslms[[9]])[1,1],(reslms[[10]])[1,1] ) )# pr retrouver le meilleur dans les lm
+
+
+l11<-mean( c( (reslms[[1]])[1,1],(reslms[[2]])[1,1],(reslms[[3]])[1,1],(reslms[[4]])[1,1],
+          (reslms[[5]])[1,1],(reslms[[6]])[1,1],(reslms[[7]])[1,1],(reslms[[8]])[1,1],
+          (reslms[[9]])[1,1],(reslms[[10]])[1,1] ) )# moyenne rmmse
+l12<-var( c( (reslms[[1]])[1,1],(reslms[[2]])[1,1],(reslms[[3]])[1,1],(reslms[[4]])[1,1],
+          (reslms[[5]])[1,1],(reslms[[6]])[1,1],(reslms[[7]])[1,1],(reslms[[8]])[1,1],
+          (reslms[[9]])[1,1],(reslms[[10]])[1,1] ) )# var rmmse
+
+l13<-mean( c( (reslms[[1]])[2,1],(reslms[[2]])[2,1],(reslms[[3]])[2,1],(reslms[[4]])[2,1],
+          (reslms[[5]])[2,1],(reslms[[6]])[2,1],(reslms[[7]])[2,1],(reslms[[8]])[2,1],
+          (reslms[[9]])[2,1],(reslms[[10]])[2,1] ) )#moyenne r carré
+l14<-var( c( (reslms[[1]])[2,1],(reslms[[2]])[2,1],(reslms[[3]])[2,1],(reslms[[4]])[2,1],
+          (reslms[[5]])[2,1],(reslms[[6]])[2,1],(reslms[[7]])[2,1],(reslms[[8]])[2,1],
+          (reslms[[9]])[2,1],(reslms[[10]])[2,1] ) )#var r carré
+
+# On créee la table des resultats finaux et on stock les données des modèles lm à l'intérieur:
+
+a=c("lm","Bacward","Forward","Both","Lasso","Ridge","Elastic-Net","Group-Lasso")
+b=c("mean(RMSE)","var(RMSE)","mean(R-squared)","var(R-squared)")
+Finalbis<-matrix(ncol=4, nrow=1, data=0)# la matrice qui contiendre la tableau final
+# d'évaluation en moyenne des modèles
+
+Finalbis[1,1]<-l11
+Finalbis[1,2]<-l12
+Finalbis[1,3]<-l13
+Finalbis[1,4]<-l14
+
+Finalbis
+as.data.frame(Final)
+
+```
+
+```{r}
+Finalbisbis<-rbind(Finalbis,Final)
+rownames(Finalbisbis)<-c("simple",a)
+colnames(Finalbisbis)<-b
+```
+
+```{r}
+as.data.frame(Finalbisbis[1:7,])
+```
+
+
+# Conclusion:

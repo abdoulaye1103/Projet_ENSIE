@@ -1,0 +1,525 @@
+---
+title: "Projet_part_3"
+author: "Abdoulaye SAKHO, Naïm SOUNI"
+date: "04/12/2021"
+output: pdf_document
+---
+
+#modeles
+
+```{r}
+f1<-function(X,n){
+  res=c()
+  for(i in 1:n){
+    res7=kmeans(scale(X,center=TRUE,scale=TRUE),i, nstart=30)# si on fait avec moins de points de départ, structure moins nette, on aura une corbe moins note
+    res=c(res,res7$tot.withinss)
+  }
+  return(res)
+}
+
+
+plot(f1(onapp[,-1],20), xlab="nb partitions",ylab="IW",col="red")#méthode du coude
+
+# on va prendre K=5 car pour K=6 on a un message d'erreur
+
+```
+
+
+
+
+##Regression lineaire sur nos données en cluster:
+```{r}
+mods<-list()# va contenir les k modregs
+K<-3
+clus<-kmeans(scale(onapp[,-9],center = TRUE,scale=TRUE),K, nstart=30)
+
+
+#####construction des k modèles:#############
+for(k in 1:K){
+  
+  
+  dat<-onapp[1,-9]#pour la réinitialisation de dat
+  for(i in 1:nrow(onapp)){
+    if(clus$cluster[i]==k){dat<-rbind(dat,onapp[i,-9])}# on stock les membres du cluster
+  }
+  dat<-dat[-1,]# pour enlever élément ajouté à la réinitialisation
+  
+  print(nrow(dat))
+  mods[[k]]<-lm(target~.,data=dat)
+}
+
+
+
+#####données test afffecté à son cluster et prédiction sur sa valeur:#############
+
+fit<-(Fold10[[10]])[1,1]# création instance
+
+for(i in 1:nrow( (Fold10[[10]]) )){
+  
+  F1<-(Fold10[[10]])[,-10] 
+  test22<-as.matrix(dist(rbind(F1[i,(-2):(-1)], clus$centers[,-1])) )
+  ktest<-sort( test22[1,], index.return=TRUE)$ix[2]
+  k2<-(ktest-1) # pcq on a rbind la ligne du i en cours
+  #  ca a décalé les indices des centers, donc du modèle qui doit etre appliqué
+  
+  
+  pred<-predict(mods[[k2]], as.data.frame( F1[i,(-2):(-1)] ))
+  fit<-rbind(fit,pred)
+}
+
+fit<-fit[-1,]
+#calculrmse:
+library(Metrics)
+rmse(fit, (Fold10[[10]])[,1] )
+#calcul r carré:
+var(fit)/var((Fold10[[10]])[,1])
+```
+
+
+
+## 10 Cross 
+```{r}
+resclus1<-list()# resultat des performances
+resclus2<-list()# va contenir les mods
+
+
+# 10 élements
+# chaque élément est un data frame de 1 colonne
+#1ere ligne: RMSE
+#2eme: r carré
+#les autres lignes sont les valeurs des coeffs les uns après les autres
+# IL Y A DES NOMS PR CHAQUE LIGNE
+
+for(i in 1:10){# i est l'indice du Fold qui nous sert de test (en cours)
+  
+  
+  #création du Fold[i]:
+  onapp10<-(Fold10[[1]])[1,-2]# pour créer le bon type et le réinitialiser
+  for( j in 1:10){ 
+    if(j != i){onapp10<-rbind(onapp10, (Fold10[[j]])[,-2])}
+  }
+  onapp10<-onapp10[-1,]# on enlève la ligne de création
+  onapp10<-as.data.frame(onapp10)
+  
+  
+  mods<-list()# va contenir les k modregs
+  K<-2
+  clus<-kmeans(scale(onapp10[,-1],center = TRUE,scale=TRUE),K, nstart=30)
+  
+  #####construction des k modèles:#############
+  for(k in 1:K){
+    
+    
+    dat<-onapp10[1,]#pour la réinitialisation de dat
+    for(l in 1:nrow(onapp10)){
+      if(clus$cluster[l]==k){dat<-rbind(dat,onapp10[l,])}# on stock les membres du cluster
+    }
+    dat<-dat[-1,]# pour enlever élément ajouté à la réinitialisation
+    
+    print(nrow(dat))
+    mods[[k]]<-lm(target~.,data=dat)
+  }
+
+  print(nrow(onapp10))
+
+#####données test afffecté à son cluster et prédiction sur sa valeur:#############
+
+  fit<-(Fold10[[10]])[1,1]# création instance
+  
+  for(l in 1:nrow( (Fold10[[i]]) )){
+    
+    
+    test22<-as.matrix(dist(rbind((Fold10[[i]])[l,(-2):(-1)], clus$centers)) )
+    ktest<-sort( test22[1,], index.return=TRUE)$ix[2]
+    k2<-(ktest-1) # pcq on a rbind la ligne du i en cours
+    #  ca a décalé les indices des centers, donc du modèle qui doit etre appliqué
+    
+    
+    pred<-predict(mods[[k2]], as.data.frame( (Fold10[[i]])[l,(-2):(-1)] ))
+    fit<-rbind(fit,pred)
+  }
+  
+  fit<-fit[-1,]
+  #calculrmse:
+  rmsecalc<-rmse(fit, (Fold10[[i]])[,1] )
+  #calcul r carré:
+  rcarre<-var(fit)/var((Fold10[[i]])[,1]) 
+    
+  
+  
+  
+  ## ons stock noc variables:
+    ## On stock le resultats dans la liste finale
+    ##1ère colonne rmse, 2ème Rcarré et les autres les coeffes, d eintercepte à la fin
+    ## garder les preds pr des diagrammes après ?
+  
+  tmp<-rbind(rmsecalc,rcarre)
+  rownames(tmp)<-c("RMSE","R-squared")
+  
+  resclus1[[i]]<-as.data.frame(tmp)
+  resclus2[[i]]<-mods
+   
+}
+
+# On vérifie nos résulktat et on affiche les données sur ces types d emodèles
+
+resclus1[[1]]
+which.min( c( (resclus1[[1]])[1,1],(resclus1[[2]])[1,1],(resclus1[[3]])[1,1],(resclus1[[4]])[1,1],
+          (resclus1[[5]])[1,1],(resclus1[[6]])[1,1],(resclus1[[7]])[1,1],(resclus1[[8]])[1,1],
+          (resclus1[[9]])[1,1],(resclus1[[10]])[1,1] ) )# pr retrouver le meilleur dans les lm
+
+
+l11<-mean( c( (resclus1[[1]])[1,1],(resclus1[[2]])[1,1],(resclus1[[3]])[1,1],(resclus1[[4]])[1,1],
+          (resclus1[[5]])[1,1],(resclus1[[6]])[1,1],(resclus1[[7]])[1,1],(resclus1[[8]])[1,1],
+          (resclus1[[9]])[1,1],(resclus1[[10]])[1,1] ) )# moyenne rmmse
+l12<-var( c( (resclus1[[1]])[1,1],(resclus1[[2]])[1,1],(resclus1[[3]])[1,1],(resclus1[[4]])[1,1],
+          (resclus1[[5]])[1,1],(resclus1[[6]])[1,1],(resclus1[[7]])[1,1],(resclus1[[8]])[1,1],
+          (resclus1[[9]])[1,1],(resclus1[[10]])[1,1] ) )# var rmmse
+
+l13<-mean( c( (resclus1[[1]])[2,1],(resclus1[[2]])[2,1],(resclus1[[3]])[2,1],(resclus1[[4]])[2,1],
+          (resclus1[[5]])[2,1],(resclus1[[6]])[2,1],(resclus1[[7]])[2,1],(resclus1[[8]])[2,1],
+          (resclus1[[9]])[2,1],(resclus1[[10]])[2,1] ) )#moyenne r carré
+l14<-var( c( (resclus1[[1]])[2,1],(resclus1[[2]])[2,1],(resclus1[[3]])[2,1],(resclus1[[4]])[2,1],
+          (resclus1[[5]])[2,1],(resclus1[[6]])[2,1],(resclus1[[7]])[2,1],(resclus1[[8]])[2,1],
+          (resclus1[[9]])[2,1],(resclus1[[10]])[2,1] ) )#var r carré
+
+a<-matrix(data = 0,nrow=1,ncol=4)
+a[1,1]<-l11
+a[1,2]<-l12
+a[1,3]<-l13
+a[1,4]<-l14
+b=c("mean(RMSE)","var(RMSE)","mean(R-squared)","var(R-squared)")
+colnames(a)<-b
+as.data.frame(a)
+
+```
+
+```{r}
+#k=2
+as.data.frame(a)
+```
+
+```{r}
+#k=3
+as.data.frame(a)
+```
+```{r}
+#k=4 avec bothward
+
+```
+
+
+
+
+
+## 10 Cross Lasso:
+```{r}
+resclus1<-list()# resultat des performances
+resclus2<-list()# va contenir les mods, les objet lars lasso
+resclus3<-list()# va contenir les mods, va contenir la valeur de lambda optimal (nomr de lambda ) pr le modèle associé
+
+
+# 10 élements
+# chaque élément est un data frame de 1 colonne
+#1ere ligne: RMSE
+#2eme: r carré
+#les autres lignes sont les valeurs des coeffs les uns après les autres
+# IL Y A DES NOMS PR CHAQUE LIGNE
+
+ ##on créee la séquence des vleurs possibles pour normeL1(beta) :
+  lasso.s<-seq(0,1,0.01)
+  
+
+for(i in 1:10){# i est l'indice du Fold qui nous sert de test (en cours)
+  
+  
+  #création du Fold[i]:
+  onapp10<-(Fold10[[1]])[1,-2]# pour créer le bon type et le réinitialiser
+  for( j in 1:10){ 
+    if(j != i){onapp10<-rbind(onapp10, (Fold10[[j]])[,-2])}
+  }
+  onapp10<-onapp10[-1,]# on enlève la ligne de création
+  onapp10<-as.data.frame(onapp10)
+  
+  
+  mods1<-list()# va contenir les k modregs
+  mods2<-list()
+  K<-8
+  clus<-kmeans(scale(onapp10[,-1],center = TRUE,scale=TRUE),K, nstart=30)
+  
+  #####construction des k modèles:#############
+  for(k in 1:K){
+    
+    
+    dat<-onapp10[1,]#pour la réinitialisation de dat
+    for(l in 1:nrow(onapp10)){
+      if(clus$cluster[l]==k){dat<-rbind(dat,onapp10[l,])}# on stock les membres du cluster
+    }
+    dat<-dat[-1,]# pour enlever élément ajouté à la réinitialisation
+    
+    print(nrow(dat))
+    
+    modlasso2=lars(as.matrix(dat[,-1]),as.matrix(dat[,1]),type="lasso")
+    ##recherche de la meilleur valeur de normeL1(beta)
+    lasso.cv<-cv.lars(as.matrix(dat[,-1]),as.matrix(dat[,1]),
+                  K=10,index=lasso.s,mode="fraction",plot.it = FALSE)
+    ##l'indice (dans la liste lasso.s) de la valeur de normeL1(lambda) qui minimise la valeur de la 10-Cross Validation:
+  lasso.mcv<-which.min(lasso.cv$cv)
+  bests1 <- lasso.s[lasso.mcv]#la valeur de normL1(lambda) qui minimise la valeur de la 10-Cross Validation
+  
+   mods1[[k]]<-modlasso2
+   mods2[[k]]<-bests1
+  }
+  print(nrow(onapp10))
+
+#####données test afffecté à son cluster et prédiction sur sa valeur:#############
+
+  fit<-(Fold10[[10]])[1,1]# création instance
+  
+  for(l in 1:nrow( (Fold10[[i]]) )){
+    
+    test22<-as.matrix(dist(rbind((Fold10[[i]])[l,(-2):(-1)], clus$centers)) )
+    ktest<-sort( test22[1,], index.return=TRUE)$ix[2]
+    k2<-(ktest-1) # pcq on a rbind la ligne du i en cours
+    #  ca a décalé les indices des centers, donc du modèle qui doit etre appliqué
+    
+    
+    pred<-predict.lars(mods1[[k2]], s=mods2[[k2]],
+                            newx=(Fold10[[i]])[l,(-2):(-1)],type="fit", mode="frac")
+    fit<-rbind(fit,pred$fit)
+  }
+  
+  fit<-fit[-1,]
+  
+  
+  #calculrmse:
+  rmsecalc<-rmse(as.vector(fit), (Fold10[[i]])[,1] )
+  #calcul r carré:
+  rcarre<-var(as.vector(fit))/var((Fold10[[i]])[,1]) 
+    
+  
+  
+  
+  ## ons stock noc variables:
+    ## On stock le resultats dans la liste finale
+    ##1ère colonne rmse, 2ème Rcarré et les autres les coeffes, d eintercepte à la fin
+    ## garder les preds pr des diagrammes après ?
+  
+  tmp<-rbind(rmsecalc,rcarre)
+  rownames(tmp)<-c("RMSE","R-squared")
+  
+  resclus1[[i]]<-as.data.frame(tmp)
+  resclus2[[i]]<-mods1
+  resclus3[[i]]<-mods2
+  print("a")
+}
+
+# On vérifie nos résulktat et on affiche les données sur ces types d emodèles
+
+resclus1[[1]]
+which.min( c( (resclus1[[1]])[1,1],(resclus1[[2]])[1,1],(resclus1[[3]])[1,1],(resclus1[[4]])[1,1],
+          (resclus1[[5]])[1,1],(resclus1[[6]])[1,1],(resclus1[[7]])[1,1],(resclus1[[8]])[1,1],
+          (resclus1[[9]])[1,1],(resclus1[[10]])[1,1] ) )# pr retrouver le meilleur dans les lm
+
+
+l11<-mean( c( (resclus1[[1]])[1,1],(resclus1[[2]])[1,1],(resclus1[[3]])[1,1],(resclus1[[4]])[1,1],
+          (resclus1[[5]])[1,1],(resclus1[[6]])[1,1],(resclus1[[7]])[1,1],(resclus1[[8]])[1,1],
+          (resclus1[[9]])[1,1],(resclus1[[10]])[1,1] ) )# moyenne rmmse
+l12<-var( c( (resclus1[[1]])[1,1],(resclus1[[2]])[1,1],(resclus1[[3]])[1,1],(resclus1[[4]])[1,1],
+          (resclus1[[5]])[1,1],(resclus1[[6]])[1,1],(resclus1[[7]])[1,1],(resclus1[[8]])[1,1],
+          (resclus1[[9]])[1,1],(resclus1[[10]])[1,1] ) )# var rmmse
+
+l13<-mean( c( (resclus1[[1]])[2,1],(resclus1[[2]])[2,1],(resclus1[[3]])[2,1],(resclus1[[4]])[2,1],
+          (resclus1[[5]])[2,1],(resclus1[[6]])[2,1],(resclus1[[7]])[2,1],(resclus1[[8]])[2,1],
+          (resclus1[[9]])[2,1],(resclus1[[10]])[2,1] ) )#moyenne r carré
+l14<-var( c( (resclus1[[1]])[2,1],(resclus1[[2]])[2,1],(resclus1[[3]])[2,1],(resclus1[[4]])[2,1],
+          (resclus1[[5]])[2,1],(resclus1[[6]])[2,1],(resclus1[[7]])[2,1],(resclus1[[8]])[2,1],
+          (resclus1[[9]])[2,1],(resclus1[[10]])[2,1] ) )#var r carré
+
+a<-matrix(data = 0,nrow=1,ncol=4)
+a[1,1]<-l11
+a[1,2]<-l12
+a[1,3]<-l13
+a[1,4]<-l14
+b=c("mean(RMSE)","var(RMSE)","mean(R-squared)","var(R-squared)")
+colnames(a)<-b
+as.data.frame(a)
+
+```
+
+
+
+
+##  simple
+```{r}
+mods<-list()# va contenir les k modregs
+K<-3
+clus<-kmeans(scale(onapp,center = TRUE,scale=TRUE),K, nstart=30)
+
+
+#####construction des k modèles:#############
+for(k in 1:K){
+  
+  
+  dat<-onapp[1,]#pour la réinitialisation de dat
+  for(i in 1:nrow(onapp)){
+    if(clus$cluster[i]==k){dat<-rbind(dat,onapp[i,])}# on stock les membres du cluster
+  }
+  dat<-dat[-1,]# pour enlever élément ajouté à la réinitialisation
+  
+  print(nrow(dat))
+  mods[[k]]<-lm(target~.,data=dat)
+}
+
+
+
+#####données test afffecté à son cluster et prédiction sur sa valeur:#############
+
+fit<-(Fold10[[10]])[1,1]# création instance
+
+for(i in 1:nrow( (Fold10[[10]]) )){
+  
+  test22<-as.matrix(dist(rbind((Fold10[[10]])[i,(-2):(-1)], clus$centers[,-1])) )
+  ktest<-sort( test22[1,], index.return=TRUE)$ix[2]
+  k2<-(ktest-1) # pcq on a rbind la ligne du i en cours
+  #  ca a décalé les indices des centers, donc du modèle qui doit etre appliqué
+  
+  
+  pred<-predict(mods[[k2]], as.data.frame( (Fold10[[10]])[i,(-2):(-1)] ))
+  fit<-rbind(fit,pred)
+}
+
+fit<-fit[-1,]
+#calculrmse:
+library(Metrics)
+rmse(as.vector(fit), (Fold10[[10]])[,1] )
+#calcul r carré:
+var(as.vector(fit))/var((Fold10[[10]])[,1])
+```
+
+
+
+
+
+##10 Cross avec Ridge:
+```{r}
+resclus1<-list()# resultat des performances
+resclus2<-list()# va contenir les mods
+
+
+# 10 élements
+# chaque élément est un data frame de 1 colonne
+#1ere ligne: RMSE
+#2eme: r carré
+#les autres lignes sont les valeurs des coeffs les uns après les autres
+# IL Y A DES NOMS PR CHAQUE LIGNE
+
+for(i in 1:10){# i est l'indice du Fold qui nous sert de test (en cours)
+  
+  
+  #création du Fold[i]:
+  onapp10<-(Fold10[[1]])[1,-2]# pour créer le bon type et le réinitialiser
+  for( j in 1:10){ 
+    if(j != i){onapp10<-rbind(onapp10, (Fold10[[j]])[,-2])}
+  }
+  onapp10<-onapp10[-1,]# on enlève la ligne de création
+  onapp10<-as.data.frame(onapp10)
+  
+  
+  mods<-list()# va contenir les k modregs
+  K<-2
+  clus<-kmeans(scale(onapp10[,-1],center = TRUE,scale=TRUE),K, nstart=30)
+  
+  #####construction des k modèles:#############
+  for(k in 1:K){
+    
+    
+    dat<-onapp10[1,]#pour la réinitialisation de dat
+    for(l in 1:nrow(onapp10)){
+      if(clus$cluster[l]==k){dat<-rbind(dat,onapp10[l,])}# on stock les membres du cluster
+    }
+    dat<-dat[-1,]# pour enlever élément ajouté à la réinitialisation
+    
+    print(nrow(dat))
+     #on construits les modèle pr différents lambda
+    regridge2=lm.ridge(target ~., data=as.data.frame(scale(dat,center = TRUE,scale = TRUE)),lambda=seq(from=0,to=1,by=0.000001))
+    const = as.numeric(names(which.min(regridge2$GCV)))
+    ##On construit modèle avec meilleur lambda:
+    mods[[k]]<-lm.ridge(target~., data=as.data.frame(scale(dat,center = TRUE,scale = TRUE)),lambda=const)
+  }
+
+  print(nrow(onapp10))
+
+#####données test afffecté à son cluster et prédiction sur sa valeur:#############
+
+  fit<-(Fold10[[10]])[1,1]# création instance
+  
+  for(l in 1:nrow( (Fold10[[i]]) )){
+    
+    test22<-as.matrix(dist(rbind(scale((Fold10[[i]])[l,(-2):(-1)],center = TRUE,scale = TRUE), clus$centers)) )
+    ktest<-sort( test22[1,], index.return=TRUE)$ix[2]
+    k2<-(ktest-1) # pcq on a rbind la ligne du i en cours
+    #  ca a décalé les indices des centers, donc du modèle qui doit etre appliqué
+    
+    aaa<-as.matrix(scale((Fold10[[i]])[l,-2:(-1)],center=TRUE,scale=TRUE))
+    aaa<-cbind(cbind(rep(1,nrow(k))),aaa)
+    pred = aaa %*% as.vector(coef(mods[[k2]]))
+    #pred<-predict(mods[[k2]], as.data.frame( (Fold10[[i]])[l,(-2):(-1)] ))
+    fit<-rbind(fit,pred)
+    print("b")
+  }
+  
+  fit<-fit[-1,]
+  #calculrmse:
+  rmsecalc<-rmse( as.vector(fit), (scale((Fold10[[i]])[,1],center=TRUE,scale=TRUE)) )
+  #calcul r carré:
+  rcarre<-var(as.vector(fit))/var((Fold10[[i]])[,1]) 
+    
+  
+  
+  
+  ## ons stock noc variables:
+    ## On stock le resultats dans la liste finale
+    ##1ère colonne rmse, 2ème Rcarré et les autres les coeffes, d eintercepte à la fin
+    ## garder les preds pr des diagrammes après ?
+  
+  tmp<-rbind(rmsecalc,rcarre)
+  rownames(tmp)<-c("RMSE","R-squared")
+  
+  resclus1[[i]]<-as.data.frame(tmp)
+  resclus2[[i]]<-mods
+   
+}
+
+# On vérifie nos résulktat et on affiche les données sur ces types d emodèles
+
+resclus1[[1]]
+which.min( c( (resclus1[[1]])[1,1],(resclus1[[2]])[1,1],(resclus1[[3]])[1,1],(resclus1[[4]])[1,1],
+          (resclus1[[5]])[1,1],(resclus1[[6]])[1,1],(resclus1[[7]])[1,1],(resclus1[[8]])[1,1],
+          (resclus1[[9]])[1,1],(resclus1[[10]])[1,1] ) )# pr retrouver le meilleur dans les lm
+
+
+l11<-mean( c( (resclus1[[1]])[1,1],(resclus1[[2]])[1,1],(resclus1[[3]])[1,1],(resclus1[[4]])[1,1],
+          (resclus1[[5]])[1,1],(resclus1[[6]])[1,1],(resclus1[[7]])[1,1],(resclus1[[8]])[1,1],
+          (resclus1[[9]])[1,1],(resclus1[[10]])[1,1] ) )# moyenne rmmse
+l12<-var( c( (resclus1[[1]])[1,1],(resclus1[[2]])[1,1],(resclus1[[3]])[1,1],(resclus1[[4]])[1,1],
+          (resclus1[[5]])[1,1],(resclus1[[6]])[1,1],(resclus1[[7]])[1,1],(resclus1[[8]])[1,1],
+          (resclus1[[9]])[1,1],(resclus1[[10]])[1,1] ) )# var rmmse
+
+l13<-mean( c( (resclus1[[1]])[2,1],(resclus1[[2]])[2,1],(resclus1[[3]])[2,1],(resclus1[[4]])[2,1],
+          (resclus1[[5]])[2,1],(resclus1[[6]])[2,1],(resclus1[[7]])[2,1],(resclus1[[8]])[2,1],
+          (resclus1[[9]])[2,1],(resclus1[[10]])[2,1] ) )#moyenne r carré
+l14<-var( c( (resclus1[[1]])[2,1],(resclus1[[2]])[2,1],(resclus1[[3]])[2,1],(resclus1[[4]])[2,1],
+          (resclus1[[5]])[2,1],(resclus1[[6]])[2,1],(resclus1[[7]])[2,1],(resclus1[[8]])[2,1],
+          (resclus1[[9]])[2,1],(resclus1[[10]])[2,1] ) )#var r carré
+
+a<-matrix(data = 0,nrow=1,ncol=4)
+a[1,1]<-l11
+a[1,2]<-l12
+a[1,3]<-l13
+a[1,4]<-l14
+b=c("mean(RMSE)","var(RMSE)","mean(R-squared)","var(R-squared)")
+colnames(a)<-b
+as.data.frame(a)
+```
+
