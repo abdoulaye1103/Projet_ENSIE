@@ -2,7 +2,7 @@
 
 *This repository contains the various academic projects that I carried out during my studies at the École Nationale Supérieure d'Informatique pour l'Industrie et l'Entreprise (ENSIIE).*
 
-*Folder Projet_PRR (**Python**) :
+* Folder Projet_PRR (**Python**) :
 
 * Folder "BINOMIAL_10_SOUNI_SAKHO" (**R**) : Machine Learnig applied to the prediction of hurricane intensity (from a database of the NOOA).
 The folder contains 3 .Rmd files. 
