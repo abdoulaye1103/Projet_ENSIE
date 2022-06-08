@@ -2,7 +2,7 @@
 
 *This repository contains the various academic projects that I carried out during my studies at the École Nationale Supérieure d'Informatique pour l'Industrie et l'Entreprise (ENSIIE).*
 
-* Folder Projet_PRR (**Python**) :
+* Folder Projet_PRR (**Python**). A research project on: "Solving NP-hard graph spanning problems using kernelization, linear programming and machine learning".
 
 * Folder "BINOMIAL_10_SOUNI_SAKHO" (**R**) : Machine Learnig applied to the prediction of hurricane intensity (from a database of the NOOA).
 The folder contains 3 .Rmd files. 
@@ -13,7 +13,7 @@ The file "Presentation_Projet_MRR.pdf" contains the presentation slides of the p
 * Folder "Projet_MAD" (**R**) : The file names are self-explanatory.
 
 
-* Kaggle Project "Rossman store Sales" (**Python**): A research project on: "Solving NP-hard graph spanning problems using kernelization, linear programming and machine learning".
+* Kaggle Project "Rossman store Sales" (**Python**)
 
 
 
